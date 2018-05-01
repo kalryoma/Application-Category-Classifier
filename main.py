@@ -23,7 +23,6 @@ def get_label(label_file, chunksize):
 
 def get_data(label_file, data_file, chunksize):
     label_list, label_dict = get_label(label_file, chunksize)
-    label_list_length = len(label_list)
     x = []
     y = []
     for chunk in pd.read_csv(data_file, header=None, chunksize=chunksize):
@@ -36,15 +35,15 @@ def get_data(label_file, data_file, chunksize):
             data = np.around(data, 8)
             x.append(data)
     x = csr_matrix(np.asmatrix(x))
-    return x, y, label_list_length
+    return x, y, label_list
 
 def generate_regularisaztion_mat(s, lmd):
     s_inv = 1.0/(s+lmd)
     return csr_matrix(np.diag(s_inv))
 
-def get_w(x, y, lmd, k):
+def get_w(x, y, lmd):
     w = x.T.dot(x)
-    u, s, ut = svds(w, k)
+    u, s, ut = svds(w, y.shape[0])
     u = csr_matrix(np.around(u, 10))
     ut = csr_matrix(np.around(ut, 10))
     v = generate_regularisaztion_mat(s, lmd)
@@ -53,7 +52,7 @@ def get_w(x, y, lmd, k):
     w = np.dot(w, t)
     return w
 
-def get_category_index(label_list_length, predicted_result):
+def get_category_index(predicted_result):
     predicted_label = []
     for i in range(len(predicted_result)):
         yi = predicted_result[i][0]
@@ -61,8 +60,10 @@ def get_category_index(label_list_length, predicted_result):
         predicted_label.append(this_label)
     return predicted_label
 
-def calc_accuracy(actual_t, label_list_length, predicted_result):
-    predicted_label = get_category_index(label_list_length, predicted_result)
+def calc_accuracy(actual_t, x, w):
+    predicted_result = x.dot(w)
+    predicted_result = predicted_result.todense().tolist()
+    predicted_label = get_category_index(predicted_result)
     trueNo = 0
     for i in range(len(actual_t)):
         if actual_t[i] == predicted_label[i]:
@@ -70,17 +71,31 @@ def calc_accuracy(actual_t, label_list_length, predicted_result):
         # print(actual_t[i], predicted_label[i], actual_t[i] == predicted_label[i])
     return trueNo*100.0/len(actual_t)
 
-data_file = '/Users/kalryoma/Downloads/5318Assignment1_Data/sample_data.csv'
+data_file = '/Users/kalryoma/Downloads/5318Assignment1_Data/sample_data1.csv'
 label_file = '/Users/kalryoma/Downloads/5318Assignment1_Data/training_labels.csv'
-chunksize = 50
-x, y, label_list_length = get_data(label_file, data_file, chunksize)
+chunksize = 100
+x, y, label_list = get_data(label_file, data_file, chunksize)
 
-k_eig = range(100, 500, 50)
-lmd = range(-10, 0)
-for j in range (len(k_eig)):
-    for i in range(len(lmd)):
-        w = get_w(x, np.asmatrix(y).T, exp(lmd[i]), k_eig[j])
-        predicted_result = x.dot(w)
-        predicted_result = predicted_result.todense().tolist()
-        accuracy = calc_accuracy(y, label_list_length, predicted_result)
-        print(k_eig[j], lmd[i], accuracy)
+datasize = 100
+start_row = 0
+chunk_count = 0
+lmd = [1]
+for i in range(len(lmd)):
+    while start_row<len(y):
+        end_row = start_row+datasize
+        if end_row>len(y):
+            end_row = len(y)
+        xi = x[start_row:end_row]
+        yi = y[start_row:end_row]
+        wi = get_w(xi, np.asmatrix(yi).T, 0)
+        accuracy = calc_accuracy(yi, xi, wi)
+        print(chunk_count, accuracy)
+        if chunk_count==0:
+            w = wi
+        else:
+            w += wi
+        start_row = end_row
+        chunk_count += 1
+    w = w/(chunk_count*1.0)
+    accuracy = calc_accuracy(y, x, w)
+    print(accuracy)
