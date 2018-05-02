@@ -1,8 +1,6 @@
 import pandas as pd
 import numpy as np
 from scipy.sparse import csr_matrix
-from scipy.sparse.linalg import svds
-from math import exp
 
 def get_label(label_file, chunksize):
     label_list = set()
@@ -37,32 +35,40 @@ def get_data(label_file, data_file, chunksize):
     x = csr_matrix(np.asmatrix(x))
     return x, y, label_list
 
-def generate_regularisaztion_mat(s, lmd):
-    s_inv = 1.0/(s+lmd)
-    return csr_matrix(np.diag(s_inv))
+def dist(v, threshold):
+    result = 0
+    for i in v:
+        if abs(i) > threshold or result > threshold:
+            return result, False
+        result += round(i**2, 10)
+    return result, True
 
-def get_w(x, y, lmd):
-    w = x.T.dot(x)
-    u, s, ut = svds(w, y.shape[0])
-    u = csr_matrix(np.around(u, 10))
-    ut = csr_matrix(np.around(ut, 10))
-    v = generate_regularisaztion_mat(s, lmd)
-    w = u.dot(v).dot(ut)
-    t = csr_matrix(x.T.dot(y))
-    w = np.dot(w, t)
+def get_w(x, y, lmd, max_iter, threshold):
+    iteration = 0
+    w = np.zeros(13626).astype(np.float)
+    w[0] = 1
+    w = np.ndarray(shape=(13626, 1), buffer=w)
+    while True:
+        err = x.T.dot(x.dot(w)-y)
+        d, flag = dist(csr_matrix(err.T).data, threshold)
+        if iteration == max_iter or flag:
+            print(iteration, d)
+            return w
+        w = w-lmd*err
+        iteration += 1
     return w
 
 def get_category_index(predicted_result):
     predicted_label = []
     for i in range(len(predicted_result)):
-        yi = predicted_result[i][0]
+        yi = predicted_result[i]
         this_label = int(round(yi))
         predicted_label.append(this_label)
     return predicted_label
 
 def calc_accuracy(actual_t, x, w):
     predicted_result = x.dot(w)
-    predicted_result = predicted_result.todense().tolist()
+    predicted_result = predicted_result.T.tolist()[0]
     predicted_label = get_category_index(predicted_result)
     trueNo = 0
     for i in range(len(actual_t)):
@@ -71,31 +77,33 @@ def calc_accuracy(actual_t, x, w):
         # print(actual_t[i], predicted_label[i], actual_t[i] == predicted_label[i])
     return trueNo*100.0/len(actual_t)
 
-data_file = '/Users/kalryoma/Downloads/5318Assignment1_Data/sample_data1.csv'
+data_file = '/Users/kalryoma/Downloads/5318Assignment1_Data/sample_data3.csv'
 label_file = '/Users/kalryoma/Downloads/5318Assignment1_Data/training_labels.csv'
-chunksize = 100
+chunksize = 50
 x, y, label_list = get_data(label_file, data_file, chunksize)
 
-datasize = 100
-start_row = 0
-chunk_count = 0
-lmd = [1]
-for i in range(len(lmd)):
-    while start_row<len(y):
-        end_row = start_row+datasize
-        if end_row>len(y):
-            end_row = len(y)
-        xi = x[start_row:end_row]
-        yi = y[start_row:end_row]
-        wi = get_w(xi, np.asmatrix(yi).T, 0)
-        accuracy = calc_accuracy(yi, xi, wi)
-        print(chunk_count, accuracy)
-        if chunk_count==0:
-            w = wi
-        else:
-            w += wi
-        start_row = end_row
-        chunk_count += 1
-    w = w/(chunk_count*1.0)
-    accuracy = calc_accuracy(y, x, w)
-    print(accuracy)
+alpha, threshold, max_iter = 0.01, 0.01, 5000
+w = get_w(x, np.asmatrix(y).T, alpha, max_iter, threshold)
+accuracy = calc_accuracy(y, x, w)
+print(accuracy)
+
+def cross_validation(k, x, y):
+    k = 2
+    datasize = int(len(y)/k)
+    average_accuracy = 0.0
+    start_row = 0
+    for i in range(k):
+        while start_row < len(y):
+            end_row = start_row+datasize
+            if end_row > len(y):
+                end_row = len(y)
+            x_training = csr_matrix(np.delete(x.todense(), range(start_row, end_row), 0))
+            x_test = x[start_row:end_row]
+            y_training = y[:start_row]+y[end_row:]
+            y_test = y[start_row:end_row]
+            start_row = end_row
+        w = get_w(x_training, np.asmatrix(y_training).T, alpha, max_iter, threshold)
+        accuracy = calc_accuracy(y_test, x_test, w)
+        print(accuracy)
+        average_accuracy += accuracy
+    return average_accuracy/(k*1.0)
