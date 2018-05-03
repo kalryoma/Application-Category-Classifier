@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from scipy.sparse import csr_matrix
+from ridge_regression import Ridge
 
 def get_label(label_file, chunksize):
     label_list = set()
@@ -33,30 +34,8 @@ def get_data(label_file, data_file, chunksize):
             data = np.around(data, 8)
             x.append(data)
     x = csr_matrix(np.asmatrix(x))
+    y = np.asmatrix(y).T.astype(np.float)
     return x, y, label_list
-
-def dist(v, threshold):
-    result = 0
-    for i in v:
-        if abs(i) > threshold or result > threshold:
-            return result, False
-        result += round(i**2, 10)
-    return result, True
-
-def get_w(x, y, lmd, max_iter, threshold):
-    iteration = 0
-    w = np.zeros(13626).astype(np.float)
-    w[0] = 1
-    w = np.ndarray(shape=(13626, 1), buffer=w)
-    while True:
-        err = x.T.dot(x.dot(w)-y)
-        d, flag = dist(csr_matrix(err.T).data, threshold)
-        if iteration == max_iter or flag:
-            print(iteration, d)
-            return w
-        w = w-lmd*err
-        iteration += 1
-    return w
 
 def get_category_index(predicted_result):
     predicted_label = []
@@ -66,8 +45,7 @@ def get_category_index(predicted_result):
         predicted_label.append(this_label)
     return predicted_label
 
-def calc_accuracy(actual_t, x, w):
-    predicted_result = x.dot(w)
+def calc_accuracy(actual_t, predicted_result):
     predicted_result = predicted_result.T.tolist()[0]
     predicted_label = get_category_index(predicted_result)
     trueNo = 0
@@ -77,18 +55,18 @@ def calc_accuracy(actual_t, x, w):
         # print(actual_t[i], predicted_label[i], actual_t[i] == predicted_label[i])
     return trueNo*100.0/len(actual_t)
 
-data_file = '/Users/kalryoma/Downloads/5318Assignment1_Data/sample_data3.csv'
+data_file = '/Users/kalryoma/Downloads/5318Assignment1_Data/sample_data1.csv'
 label_file = '/Users/kalryoma/Downloads/5318Assignment1_Data/training_labels.csv'
 chunksize = 50
-x, y, label_list = get_data(label_file, data_file, chunksize)
+X, y, label_list = get_data(label_file, data_file, chunksize)
 
-alpha, threshold, max_iter = 0.01, 0.01, 5000
-w = get_w(x, np.asmatrix(y).T, alpha, max_iter, threshold)
-accuracy = calc_accuracy(y, x, w)
+ridge = Ridge(max_iters=4000, alpha=0.001, lmd=0.05)
+ridge.regression(X, y)
+outs = ridge.predict(X)
+accuracy = calc_accuracy(y.T.tolist()[0], outs)
 print(accuracy)
 
 def cross_validation(k, x, y):
-    k = 2
     datasize = int(len(y)/k)
     average_accuracy = 0.0
     start_row = 0
@@ -102,8 +80,12 @@ def cross_validation(k, x, y):
             y_training = y[:start_row]+y[end_row:]
             y_test = y[start_row:end_row]
             start_row = end_row
-        w = get_w(x_training, np.asmatrix(y_training).T, alpha, max_iter, threshold)
-        accuracy = calc_accuracy(y_test, x_test, w)
+        ridge.regression(x_training, np.asmatrix(y_training).T)
+        outs = ridge.predict(x_test)
+        accuracy = calc_accuracy(y_test, outs)
         print(accuracy)
         average_accuracy += accuracy
     return average_accuracy/(k*1.0)
+
+vali = cross_validation(10, X, y.T.tolist()[0])
+print(vali)
