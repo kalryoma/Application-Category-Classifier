@@ -36,6 +36,19 @@ def get_data(label_file, data_file, chunksize):
     x = csr_matrix(np.asmatrix(x))
     return x, y, label_list
 
+
+def get_test_data(test_file, chunksize):
+    x = []
+    app_name = []
+    for chunk in pd.read_csv(data_file, header=None, chunksize=chunksize):
+        for row in chunk.values:
+            app_name.append(row[0])
+            data = np.array(row[1:]).astype(np.float)
+            data = np.around(data, 8)
+            x.append(data)
+    x = csr_matrix(np.asmatrix(x))
+    return x, app_name
+
 def calc_accuracy(actual_t, predicted_label):
     trueNo = 0
     for i in range(len(actual_t)):
@@ -66,10 +79,21 @@ def cross_validation(k, x, y):
             average_accuracy += accuracy
     return average_accuracy/(k*1.0)
 
-data_file = '/Users/kalryoma/Downloads/5318Assignment1_Data/sample_data1.csv'
+data_file = '/Users/kalryoma/Downloads/5318Assignment1_Data/training_data.csv'
 label_file = '/Users/kalryoma/Downloads/5318Assignment1_Data/training_labels.csv'
-chunksize = 50
+test_file = '/Users/kalryoma/Downloads/5318Assignment1_Data/test_data.csv'
+chunksize = 3000
 x, y, label_list = get_data(label_file, data_file, chunksize)
+test_chunksize = 300
+x_test, test_app = get_test_data(test_file, test_chunksize)
 
-validation = cross_validation(5, x, y)
-print(validation)
+model = MultinomialNB()
+model.fit(x, np.array(y))
+outs = model.predict(x_test)
+predict_label = []
+for i in outs:
+    predict_label.append(label_list[i])
+
+with open("/Users/kalryoma/Downloads/5318Assignment1_Data/predicted_labels.csv", "w") as f:
+    for i in range(len(predict_label)):
+        f.write(test_app[i]+","+predict_label[i]+"\n")
