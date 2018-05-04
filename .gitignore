@@ -1,2 +1,5 @@
 .vscode/launch.json
 temp.py
+__pycache__/ridge_regression.cpython-36.pyc
+__pycache__/MultinomialNB.cpython-36.pyc
+.DS_Store

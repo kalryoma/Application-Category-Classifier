@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
-from scipy.sparse import csr_matrix
-from ridge_regression import Ridge
+from scipy.sparse import csr_matrix# from sklearn.naive_bayes import MultinomialNB
+from MultinomialNB import MultinomialNB
 
 def get_label(label_file, chunksize):
     label_list = set()
@@ -34,37 +34,14 @@ def get_data(label_file, data_file, chunksize):
             data = np.around(data, 8)
             x.append(data)
     x = csr_matrix(np.asmatrix(x))
-    y = np.asmatrix(y).T.astype(np.float)
     return x, y, label_list
 
-def get_category_index(predicted_result):
-    predicted_label = []
-    for i in range(len(predicted_result)):
-        yi = predicted_result[i]
-        this_label = int(round(yi))
-        predicted_label.append(this_label)
-    return predicted_label
-
-def calc_accuracy(actual_t, predicted_result):
-    predicted_result = predicted_result.T.tolist()[0]
-    predicted_label = get_category_index(predicted_result)
+def calc_accuracy(actual_t, predicted_label):
     trueNo = 0
     for i in range(len(actual_t)):
         if actual_t[i] == predicted_label[i]:
             trueNo += 1
-        # print(actual_t[i], predicted_label[i], actual_t[i] == predicted_label[i])
     return trueNo*100.0/len(actual_t)
-
-data_file = '/Users/kalryoma/Downloads/5318Assignment1_Data/sample_data1.csv'
-label_file = '/Users/kalryoma/Downloads/5318Assignment1_Data/training_labels.csv'
-chunksize = 50
-X, y, label_list = get_data(label_file, data_file, chunksize)
-
-ridge = Ridge(max_iters=4000, alpha=0.001, lmd=0.05)
-ridge.regression(X, y)
-outs = ridge.predict(X)
-accuracy = calc_accuracy(y.T.tolist()[0], outs)
-print(accuracy)
 
 def cross_validation(k, x, y):
     datasize = int(len(y)/k)
@@ -80,12 +57,19 @@ def cross_validation(k, x, y):
             y_training = y[:start_row]+y[end_row:]
             y_test = y[start_row:end_row]
             start_row = end_row
-        ridge.regression(x_training, np.asmatrix(y_training).T)
-        outs = ridge.predict(x_test)
-        accuracy = calc_accuracy(y_test, outs)
-        print(accuracy)
-        average_accuracy += accuracy
+
+            model = MultinomialNB()
+            model.fit(x_training, np.array(y_training))
+            outs = model.predict(x_test)
+            accuracy = calc_accuracy(y_test, outs)
+            print(accuracy)
+            average_accuracy += accuracy
     return average_accuracy/(k*1.0)
 
-vali = cross_validation(10, X, y.T.tolist()[0])
-print(vali)
+data_file = '/Users/kalryoma/Downloads/5318Assignment1_Data/sample_data1.csv'
+label_file = '/Users/kalryoma/Downloads/5318Assignment1_Data/training_labels.csv'
+chunksize = 50
+x, y, label_list = get_data(label_file, data_file, chunksize)
+
+validation = cross_validation(5, x, y)
+print(validation)
